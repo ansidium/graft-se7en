@@ -1,0 +1,38 @@
+# Se7en patch inventory
+
+This file inventories the fork delta from `NanoNets/context-graph-engine`.
+
+## Modified upstream files
+
+- `package.json` — changes only the package name to `graft-se7en`.
+- `README.md` — documents the fork's Pascal/Delphi support and upstream update flow.
+- `src/graph/extract.ts` — adds the optional case-insensitive resolver intent used by Pascal edges.
+- `src/graph/generic.ts` — registers Pascal in the existing WASM language registry and delegates to its focused extractor.
+- `src/graph/resolve.ts` — resolves Pascal identifiers, typed methods, inheritance, and unit imports case-insensitively.
+- `src/graph/workspace.ts` — narrows call tracing by workspace child before applying an optional in-repo path scope.
+- `src/mcp/tools.ts` — routes workspace-prefixed file API requests to the owning child graph.
+- `test/mcp-tools.test.ts` — covers workspace file API routing.
+
+## Added files
+
+- `src/graph/pascal.ts` — Pascal/Delphi symbols, spans, imports, bindings, deduplication, and call extraction.
+- `test/graph-pascal.test.ts` — unit, program, package, include, line-ending, large-file, and call-resolution coverage.
+- `scripts/grammars/tree-sitter-pascal.wasm` — prebuilt Pascal grammar for `web-tree-sitter`.
+- `scripts/grammars/tree-sitter-pascal.LICENSE` — upstream grammar license.
+- `PATCHES-se7en.md` — this inventory.
+
+## Grammar provenance
+
+- Source: `https://github.com/Isopod/tree-sitter-pascal`
+- Revision: `042119eca2e18a60e56317fb06ee3ba5c32cb447` (`0.10.2`)
+- License: MIT
+- Toolchain used for the checked-in artifact: `tree-sitter-cli 0.24.7`, Emscripten `6.0.7`
+- Artifact SHA-256: `09ce32de1653832194a21173e9fc66fecbc377e1da8fe8b2b7cafa96cac734cf`
+
+Rebuild from the pinned grammar checkout with:
+
+```sh
+npx tree-sitter build --wasm --output tree-sitter-pascal.wasm
+```
+
+Copy the resulting file to `scripts/grammars/tree-sitter-pascal.wasm`, then verify the recorded SHA-256, `npm run build`, the focused Pascal tests, and `npm pack --dry-run` before committing an artifact update.

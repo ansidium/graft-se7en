@@ -554,6 +554,12 @@ Two clones of PocketBase at the same commit: one wired with `graft init`, one un
 
 ---
 
+## Se7en additions
+
+This fork adds first-class Pascal/Delphi indexing for `.pas`, `.dpr`, `.dpk`, and `.inc`: modules, `uses` imports, class/record/interface types, implementation-backed routine spans, interface/implementation deduplication, and case-insensitive call resolution. The Pascal grammar ships as a prebuilt WASM asset, so consumers do not need native build tools.
+
+To update from upstream, run `git fetch upstream`, `git merge upstream/main`, `npm ci`, and `npm run build`. The package name in `package.json` is intentionally fork-local; resolve that one line in favor of `graft-se7en` if upstream changes it.
+
 ## Development
 
 ```bash
