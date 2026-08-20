@@ -24,6 +24,7 @@ import { createRequire } from "node:module";
 import { contentHash } from "../util/id.js";
 import type { Kind, NodeV1 } from "./types.js";
 import type { ExtractResult, RawEdge } from "./extract.js";
+import { extractPascal, readPascalWasm } from "./pascal.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -36,6 +37,8 @@ export interface GenericLang {
   name: string;
   exts: string[];
   wasm: string;
+  wasmBytes?: () => Buffer | null;
+  extract?: (rel: string, source: string, root: TsNode) => ExtractResult;
 }
 
 /** The breadth registry. Add a row + a queries/<name>.scm to support a language.
@@ -59,6 +62,7 @@ export const GENERIC_LANGS: readonly GenericLang[] = [
   { name: "zig", exts: [".zig"], wasm: "zig" },
   { name: "dart", exts: [".dart"], wasm: "dart" }, // surfaced by PR #38 (@muneebshere)
   { name: "clojure", exts: [".clj", ".cljs", ".cljc", ".bb"], wasm: "clojure" },
+  { name: "pascal", exts: [".pas", ".dpr", ".dpk", ".inc"], wasm: "pascal", wasmBytes: readPascalWasm, extract: extractPascal },
 ];
 
 const byExt = new Map<string, GenericLang>();
@@ -86,7 +90,7 @@ const KIND: Record<string, Kind> = {
 
 // Loaded grammars + compiled tags queries, keyed by graft lang name. Populated by
 // warmGenericGrammars; read synchronously by extractGeneric.
-interface Loaded { language: unknown; query: unknown | null }
+interface Loaded { language: unknown; query: unknown | null; extract?: GenericLang["extract"] }
 const loaded = new Map<string, Loaded>();
 let tsMod: typeof import("web-tree-sitter") | null = null;
 let initPromise: Promise<void> | null = null;
@@ -133,7 +137,7 @@ export async function warmGenericGrammars(langNames: Iterable<string>): Promise<
   const { Language, Query } = tsMod;
   for (const name of need) {
     const row = GENERIC_LANGS.find((l) => l.name === name)!;
-    const bytes = requireWasm(row.wasm);
+    const bytes = row.wasmBytes?.() ?? requireWasm(row.wasm);
     if (!bytes) continue;
     try {
       const language = await Language.load(bytes);
@@ -142,7 +146,7 @@ export async function warmGenericGrammars(langNames: Iterable<string>): Promise<
       if (scm) {
         try { query = new Query(language, scm); } catch { query = null; }
       }
-      loaded.set(name, { language, query });
+      loaded.set(name, { language, query, extract: row.extract });
     } catch {
       /* grammar failed to instantiate — skip; files extract as file-only */
     }
@@ -223,6 +227,7 @@ export function extractGeneric(rel: string, source: string, langName: string): E
     return { nodes, rawEdges };
   }
   if (!tree) return { nodes, rawEdges };
+  if (entry.extract) return entry.extract(rel, source, tree.rootNode as TsNode);
 
   const minted = new Set<string>([rel]);
   const lines = source.split("\n");

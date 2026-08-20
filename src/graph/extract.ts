@@ -94,6 +94,8 @@ export interface RawEdge {
    * otherwise indistinguishable — and picking wrong turns a delegating overload
    * into a self-loop. */
   argCount?: number;
+  /** Pascal-family matching is case-insensitive for symbols, owners and calls. */
+  caseInsensitive?: boolean;
 }
 
 export interface ExtractResult {
