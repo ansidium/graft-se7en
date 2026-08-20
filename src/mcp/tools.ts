@@ -3,6 +3,7 @@
  * `callTool` never throws — hosts get soft errors as isError content.
  */
 import { Graft } from '../engine.js';
+import { join } from 'node:path';
 import { formatAsk, skeleton, formatSkeleton } from '../ask/ask.js';
 import { formatCheckReport } from '../context/check.js';
 import { formatGraphCheckReport } from '../graph/check.js';
@@ -24,6 +25,7 @@ import {
   readWorkspace,
 } from '../graph/workspace.js';
 import type { NodeV1 } from '../graph/types.js';
+import { normalizePathPrefix } from '../util/paths.js';
 
 export interface ToolDef {
   name: string;
@@ -144,10 +146,9 @@ function renderMatches(
     .join('\n\n');
 }
 
-/** When the MCP server is rooted at a workspace parent, the ask/callers/grep/
- * map/check tools federate across the children — identical to the CLI. Returns
- * null for tools that don't federate (skeleton is per-file), so the caller
- * falls through to the normal single-graph path. */
+/** When the MCP server is rooted at a workspace parent, tools federate across
+ * the children — identical to the CLI. File API requests route to the child
+ * named by the first path segment; other unknown tools fall through. */
 async function callWorkspaceTool(
   root: string,
   dirOverride: string | undefined,
@@ -155,6 +156,25 @@ async function callWorkspaceTool(
   args: Record<string, unknown>,
 ): Promise<{ text: string; isError: boolean } | null> {
   switch (name) {
+    case 'graft_file_api': {
+      const file = normalizePathPrefix(String(args.file ?? ''));
+      if (!file) return { text: 'graft_file_api requires a file', isError: true };
+      const ws = readWorkspace(root, dirOverride)!;
+      const slash = file.indexOf('/');
+      const child = slash > 0 ? file.slice(0, slash) : '';
+      const childFile = slash > 0 ? file.slice(slash + 1) : '';
+      if (!childFile || !ws.children.includes(child)) {
+        return {
+          text: `workspace file paths must start with a repo name: ${ws.children.join(', ')}`,
+          isError: true,
+        };
+      }
+      const r = skeleton(join(root, child), childFile);
+      return {
+        text: formatSkeleton({ ...r, file: `${child}/${r.file}` }),
+        isError: !r.entries.length && !!r.note,
+      };
+    }
     case 'graft_find_code': {
       const query = String(args.query ?? '');
       if (!query) return { text: 'graft_find_code requires a query', isError: true };

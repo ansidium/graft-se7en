@@ -42,6 +42,7 @@ import { fuseScopes, STRONG_FLOOR, HIGH_FLOOR, type ScopedDoc } from "../ask/fus
 import { grepGraph, type GrepGroup, type GrepResult } from "../search/grep.js";
 import { formatGrepResult, zeroHitNote } from "../search/grep-cli.js";
 import { withSavings, type Savings } from "../context/savings.js";
+import { normalizePathPrefix } from "../util/paths.js";
 
 /** The parent index written to `<parent>/graft/workspace.json`. Nodes/edges
  * never live at the parent — they live in each child's own `graft/`. */
@@ -426,10 +427,23 @@ export function federateCallers(
   const depth = opts.depth && opts.depth >= 1 ? Math.floor(opts.depth) : 1;
   const showDepth = depth > 1;
 
+  let onlyChild: string | undefined;
+  let childIn: string | undefined;
+  if (opts.in) {
+    const [name, ...rest] = normalizePathPrefix(opts.in).split("/");
+    const allChildren = [...wg.loaded.map((l) => l.child), ...wg.missing].sort();
+    if (!allChildren.includes(name)) {
+      throw new Error(`no workspace repo "${name}" - repos: ${allChildren.join(", ")}`);
+    }
+    onlyChild = name;
+    childIn = rest.length ? rest.join("/") : undefined;
+  }
+
   const blocks: string[] = [];
   let found = false;
   for (const { child, graph } of wg.loaded) {
-    const matches = resolveSymbol(graph, symbol, opts.in ? { in: opts.in } : {});
+    if (onlyChild && child !== onlyChild) continue;
+    const matches = resolveSymbol(graph, symbol, childIn ? { in: childIn } : {});
     if (matches.length === 0) continue;
     found = true;
     const results = matches.map((m) => ({ symbol: m, hits: edgeWalk(graph, m, direction, depth) }));

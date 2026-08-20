@@ -15,6 +15,20 @@ function builtRepo(): string {
   return d;
 }
 
+function builtWorkspace(): string {
+  const d = mkdtempSync(join(tmpdir(), 'graft-mcptools-workspace-'));
+  for (const repo of ['repoA', 'repoB']) {
+    mkdirSync(join(d, repo, '.git'), { recursive: true });
+    mkdirSync(join(d, repo, 'src'), { recursive: true });
+    writeFileSync(
+      join(d, repo, 'src', 'math.ts'),
+      `export function ${repo}Add(a: number, b: number): number {\n  return a + b;\n}\n`,
+    );
+  }
+  execFileSync(process.execPath, ['--import', 'tsx', 'src/cli.ts', 'build', d], { stdio: 'pipe' });
+  return d;
+}
+
 /** Three-deep call chain (compute -> sub -> add) so a `--depth`/`depth` param
  * has something to distinguish: depth 1 from `add` reaches only `sub`, the
  * default depth (2) also reaches `compute`. Same fixture shape as
@@ -298,6 +312,24 @@ test('graft_file_api returns signatures for a file, errors on unknown file', asy
   assert.match(r.text, /function add {2}function add\(a: number, b: number\): number/);
   const miss = await callTool(d, 'graft_file_api', { file: 'src/nope.ts' });
   assert.equal(miss.isError, true);
+});
+
+test('graft_file_api routes a workspace-prefixed file to its child graph', async () => {
+  const d = builtWorkspace();
+  const r = await callTool(d, 'graft_file_api', { file: 'repoA/src/math.ts' });
+  assert.equal(r.isError, false, r.text);
+  assert.match(r.text, /graft skeleton — repoA\/src\/math\.ts/);
+  assert.match(r.text, /repoAAdd/);
+  assert.doesNotMatch(r.text, /repoBAdd/);
+
+  const unscoped = await callTool(d, 'graft_file_api', { file: 'src/math.ts' });
+  assert.equal(unscoped.isError, true);
+  assert.match(unscoped.text, /workspace file paths must start with a repo name/);
+
+  const trace = await callTool(d, 'graft_trace_calls', { symbol: 'repoAAdd', in: 'repoA' });
+  assert.equal(trace.isError, false, trace.text);
+  assert.match(trace.text, /## repoA\//);
+  assert.doesNotMatch(trace.text, /## repoB\//);
 });
 
 // ── the rename: new names advertised, old names still answered ──
