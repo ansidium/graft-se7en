@@ -16,7 +16,7 @@ test('cursor/gemini/kiro get repo-local JSON entries', () => {
   const w = registerMcpConfigs(repo, ['cursor', 'gemini', 'kiro'], { home });
   assert.deepEqual(w.map((x) => x.action), ['created', 'created', 'created']);
   const cursor = JSON.parse(readFileSync(join(repo, '.cursor', 'mcp.json'), 'utf8'));
-  assert.deepEqual(cursor.mcpServers.graft, { command: 'npx', args: ['-y', '@nanonets/graft', 'mcp'] });
+  assert.deepEqual(cursor.mcpServers.graft, { command: 'npx', args: ['-y', 'github:ansidium/graft-se7en', 'mcp'] });
   assert.ok(existsSync(join(repo, '.gemini', 'settings.json')));
   assert.ok(existsSync(join(repo, '.kiro', 'settings', 'mcp.json')));
 });
@@ -51,7 +51,7 @@ test('agents id: codex TOML + opencode JSON, gated on home dirs', () => {
   assert.equal(w.length, 2);
   const toml = readFileSync(join(home, '.codex', 'config.toml'), 'utf8');
   assert.match(toml, /^\[mcp_servers\.graft\]$/m);
-  assert.match(toml, /"@nanonets\/graft"/);
+  assert.match(toml, /"github:ansidium\/graft-se7en"/);
   const oc = JSON.parse(readFileSync(join(repo, 'opencode.json'), 'utf8'));
   assert.equal(oc.mcp.graft.type, 'local');
   const again = registerMcpConfigs(repo, ['agents'], { home });
@@ -86,7 +86,7 @@ test('serverEntry prefers the installed binary and falls back to npx', () => {
   delete process.env.GRAFT_MCP_NPX;
   try {
     assert.deepEqual(serverEntry({ onPath: true }), { command: 'graft', args: ['mcp'] });
-    assert.deepEqual(serverEntry({ onPath: false }), { command: 'npx', args: ['-y', '@nanonets/graft', 'mcp'] });
+    assert.deepEqual(serverEntry({ onPath: false }), { command: 'npx', args: ['-y', 'github:ansidium/graft-se7en', 'mcp'] });
     for (const e of [serverEntry({ onPath: true }), serverEntry({ onPath: false })]) {
       assert.ok(!e.command.startsWith('/'), 'never an absolute path — configs get shared');
     }

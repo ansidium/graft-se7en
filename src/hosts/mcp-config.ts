@@ -45,7 +45,7 @@ export interface McpTarget extends PlannedWrite {
  * bare `graft` works on any machine that has it installed; `npx` remains the
  * fallback for machines that don't.
  */
-const NPX_LAUNCH = { command: 'npx', args: ['-y', '@nanonets/graft', 'mcp'] };
+const NPX_LAUNCH = { command: 'npx', args: ['-y', 'github:ansidium/graft-se7en', 'mcp'] };
 const BIN_LAUNCH = { command: 'graft', args: ['mcp'] };
 
 function graftOnPath(): boolean {

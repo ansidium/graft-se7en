@@ -123,16 +123,16 @@ export function formatUpgradeReport(result: UpgradeResult): string {
   if (!result.ran) {
     return (
       "running via npx — npx already fetches the latest graft on every run.\n" +
-      "For a permanent install: npm install -g @nanonets/graft"
+      "For a permanent install: npm install -g github:ansidium/graft-se7en"
     );
   }
   if (!result.ok) {
-    return `✗ npm install -g ${PKG_NAME}@latest failed${result.errorMessage ? `: ${result.errorMessage}` : ""}`;
+    return `✗ npm install -g github:ansidium/graft-se7en failed${result.errorMessage ? `: ${result.errorMessage}` : ""}`;
   }
   return `graft ${result.oldVersion ?? "?"} → ${result.newVersion ?? result.oldVersion ?? "?"}`;
 }
 
-/** Runs `npm install -g @nanonets/graft@latest` (inheriting stdio so the user
+/** Runs `npm install -g github:ansidium/graft-se7en` (inheriting stdio so the user
  * sees npm's own progress/errors), then re-reads the freshly installed
  * version. No-ops with guidance when running via npx. */
 export function runUpgrade(moduleUrl: string): UpgradeResult {
@@ -140,10 +140,10 @@ export function runUpgrade(moduleUrl: string): UpgradeResult {
   if (isRunningViaNpx(moduleUrl)) {
     return { ran: false, ok: true, oldVersion };
   }
-  const res = spawnSync("npm", ["install", "-g", `${PKG_NAME}@latest`], { stdio: "inherit" });
+  const res = spawnSync("npm", ["install", "-g", "github:ansidium/graft-se7en"], { stdio: "inherit" });
   if (res.error || (res.status ?? 1) !== 0) {
     return { ran: true, ok: false, oldVersion, errorMessage: res.error?.message };
   }
-  const newVersion = readGlobalInstalledVersion(PKG_NAME) ?? getNpmViewVersion(PKG_NAME).version ?? oldVersion;
+  const newVersion = readGlobalInstalledVersion("graft-se7en") ?? readGlobalInstalledVersion(PKG_NAME) ?? oldVersion;
   return { ran: true, ok: true, oldVersion, newVersion };
 }

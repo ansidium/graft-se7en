@@ -146,7 +146,7 @@ export function maybeRefreshInBackground(home?: string, now = Date.now()): boole
  * "you're up to date". */
 export function formatUpdateNudge(current: string, latest: string | null | undefined): string | null {
   if (!isNewer(latest, current)) return null;
-  return `⬆ graft ${current} → ${latest} available: run \`npm i -g @nanonets/graft@latest\` (restart your agent after).`;
+  return `⬆ upstream graft ${current} → ${latest} available: rebase the fork, then \`npm i -g github:ansidium/graft-se7en\` (restart your agent after).`;
 }
 
 /* -------------------------------------------------------------------------- */

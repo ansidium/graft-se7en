@@ -33,7 +33,7 @@ test('formatVersionReport: offline / unreachable', () => {
 test('formatUpgradeReport: npx no-op suggests a permanent install', () => {
   const out = formatUpgradeReport({ ran: false, ok: true, oldVersion: '0.4.4' });
   assert.match(out, /npx/);
-  assert.match(out, /npm install -g @nanonets\/graft/);
+  assert.match(out, /npm install -g github:ansidium\/graft-se7en/);
 });
 
 test('formatUpgradeReport: successful upgrade shows old -> new', () => {

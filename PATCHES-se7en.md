@@ -11,7 +11,11 @@ This file inventories the fork delta from `NanoNets/context-graph-engine`.
 - `src/graph/resolve.ts` — resolves Pascal identifiers, typed methods, inheritance, and unit imports case-insensitively.
 - `src/graph/workspace.ts` — narrows call tracing by workspace child before applying an optional in-repo path scope.
 - `src/mcp/tools.ts` — routes workspace-prefixed file API requests to the owning child graph.
+- `src/hosts/mcp-config.ts` — points the MCP `npx` launch line at `github:ansidium/graft-se7en` so the wiring self-heal never rewrites configs back to the npm registry package.
+- `src/cli-meta.ts` — `graft upgrade` installs from `github:ansidium/graft-se7en` instead of `@nanonets/graft@latest` (which would replace the fork with upstream).
+- `src/upkeep.ts` — the update nudge suggests rebasing the fork and reinstalling from GitHub rather than `npm i -g @nanonets/graft@latest`.
 - `test/mcp-tools.test.ts` — covers workspace file API routing.
+- `test/hosts-mcp-config.test.ts`, `test/cli-meta.test.ts`, `test/upkeep.test.ts`, `test/upkeep-hooks.test.ts` — assertions follow the GitHub launch/upgrade lines above.
 
 ## Added files
 
