@@ -17,6 +17,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { runCli, tmpRepo } from "./helpers.js";
+import { changedFiles } from "../src/blast/diff.js";
 
 const MATH = `export function add(a: number, b: number): number {
   return a + b;
@@ -202,6 +203,23 @@ test("blast: an unknown --base names the CI cause (checkout depth), not a git in
   assert.match(r.stderr, /fetch-depth: 0/);
 });
 
+test("blast: an area is named after its most-depended-on function, not the last one seen", () => {
+  const d = builtRepo();
+  // `add` is called by total (and transitively by report); `unused` is called by
+  // nothing. Editing both must label the area `add`, whichever order the walk sees
+  // them in — before this, the label was whatever symbol the file ended on.
+  writeFileSync(
+    join(d, "src", "math.ts"),
+    "export function add(a: number, b: number): number {\n  return a + b + 0;\n}\n" +
+      "export function unused(): number {\n  return 41 + 1;\n}\n",
+  );
+
+  const report = blastJson([d]);
+  assert.equal(report.areas.length, 1);
+  assert.equal(report.areas[0].seedNames[0], "add", `ranked hub, got ${report.areas[0].seedNames.join(", ")}`);
+  assert.equal(report.areas[0].label, "add");
+});
+
 test("blast: a clean tree reports the last commit rather than nothing at all", () => {
   const d = builtRepo();
   writeFileSync(join(d, "src", "math.ts"), MATH_EDITED);
@@ -211,4 +229,31 @@ test("blast: a clean tree reports the last commit rather than nothing at all", (
   const report = blastJson([d]);
   assert.equal(report.basis, "HEAD~1...HEAD");
   assert.ok(report.impacted.some((i) => i.name === "total"));
+});
+
+test("diff: hunks carry their text, and the next file's header is not read as a deleted line", () => {
+  const d = builtRepo();
+  // A `--` line of SQL is the trap: `--- a/x.sql` is a header, `-- comment` is
+  // content, and both start with a dash in the patch.
+  writeFileSync(join(d, "src", "math.ts"), MATH_EDITED);
+  writeFileSync(join(d, "query.sql"), "-- report\n");
+  git(d, "add", "-A");
+  git(d, "commit", "-m", "edit");
+
+  const res = changedFiles(d, "HEAD~1");
+  assert.ok(res);
+  const math = res.files.find((f) => f.path === "src/math.ts");
+  assert.ok(math);
+  assert.deepEqual(math.hunks.map((h) => h.lines), [[
+    { n: null, sign: "-", text: "  return a + b;" },
+    { n: 2, sign: "+", text: "  return b + a;" },
+  ]], "both sides of the edit, with post-image numbering");
+  assert.deepEqual(math.ranges, math.hunks.map((h) => ({ start: h.start, end: h.end })), "ranges mirror hunks");
+  assert.ok(
+    !math.hunks.some((h) => h.lines.some((l) => l.text.includes("query.sql"))),
+    "the next file's --- header stayed out of this file's hunk",
+  );
+
+  const sql = res.files.find((f) => f.path === "query.sql");
+  assert.deepEqual(sql?.hunks[0].lines, [{ n: 1, sign: "+", text: "-- report" }], "a real -- line survives");
 });

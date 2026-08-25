@@ -16,7 +16,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { assembleContextGraph } from "./assemble.js";
+import { assembleContextGraph, type VizGraph } from "./assemble.js";
 
 export interface VizExportOptions {
   contextDir: string;
@@ -27,6 +27,22 @@ export interface VizExportOptions {
   repoName: string;
   /** Shown in the appbar beside the repo name — e.g. "PR #151". */
   subtitle?: string;
+  /**
+   * Context graph to inline instead of assembling one from the deep tier's concept
+   * files. `graft blast --export-viz` passes the blast radius itself, which is how a
+   * PR gets a Context tab worth opening without a `--deep` build.
+   */
+  contextGraph?: VizGraph;
+  /**
+   * Tabs the page offers. Default: all three.
+   *
+   * A blast page passes `["context"]`. The Code tab there is the repo's whole
+   * wiring graph — 1,377 nodes on graft itself, a hairball that answers nothing
+   * about the pull request, and ~95% of the exported megabyte — and Outline is the
+   * repo's file tree. Dropping them makes the page a tenth of the size and removes
+   * two tabs a reviewer has no reason to open.
+   */
+  tabs?: Array<"context" | "code" | "outline">;
 }
 
 export interface VizExportResult {
@@ -36,6 +52,8 @@ export interface VizExportResult {
   codeNodes: number;
   /** Tab the exported page opens on — see the reasoning in {@link exportViz}. */
   defaultTab: "context" | "code";
+  /** Tabs written into the page. */
+  tabs: Array<"context" | "code" | "outline">;
 }
 
 /** The wiring graph as the viewer's endpoint would have served it, or null. */
@@ -67,13 +85,28 @@ function inlineJson(value: unknown): string {
     .replace(/\u2029/g, "\\u2029");
 }
 
+/** The two tags this exporter rewrites, verbatim from viewer/index.html. */
+const LINK_TAG = '<link rel="stylesheet" href="/style.css">';
+const SCRIPT_TAG = '<script type="module" src="/app.js"></script>';
+
 export function exportViz(opts: VizExportOptions): VizExportResult {
   const html = readFileSync(join(opts.viewerDir, "index.html"), "utf8");
+
+  // Checked on the SOURCE, before anything is inlined. Checking the assembled page
+  // instead looks equivalent and is not: a stylesheet comment or a bundled string
+  // containing one of these tags would fail an export that was in fact correct.
+  if (!html.includes(LINK_TAG) || !html.includes(SCRIPT_TAG)) {
+    throw new Error("viz export: viewer/index.html no longer matches the asset tags this exporter rewrites");
+  }
   const css = readFileSync(join(opts.viewerDir, "style.css"), "utf8");
   const js = readFileSync(join(opts.viewerDir, "app.js"), "utf8");
 
-  const context = assembleContextGraph(opts.contextDir);
-  const code = codeGraph(opts.contextDir);
+  const context = opts.contextGraph ?? assembleContextGraph(opts.contextDir);
+  const tabs = opts.tabs ?? ["context", "code", "outline"];
+  // Both remaining tabs read the wiring graph, so dropping them drops the payload
+  // as well — the point of the option, not a side effect of it.
+  const wanted = tabs.includes("code") || tabs.includes("outline");
+  const code = wanted ? codeGraph(opts.contextDir) : null;
 
   // Which tab to open on. The viewer starts on Context, which only a `--deep` build
   // fills: a structural build writes wiring cards (no frontmatter, so nothing to
@@ -81,10 +114,11 @@ export function exportViz(opts: VizExportOptions): VizExportResult {
   // PR path is now structural by design, opening on Context would show a canvas
   // with one dot while the whole wiring graph sat behind an unadvertised tab.
   const codeNodes = (code as { nodes?: unknown[] } | null)?.nodes?.length ?? 0;
-  const defaultTab = context.nodes.length > 1 || codeNodes === 0 ? "context" : "code";
+  // A supplied graph is the caller's whole point, so it is always the landing tab.
+  const defaultTab = opts.contextGraph || context.nodes.length > 1 || codeNodes === 0 ? "context" : "code";
   const contextGraph = {
     ...context,
-    meta: { ...context.meta, repoName: opts.repoName, subtitle: opts.subtitle, defaultTab },
+    meta: { ...context.meta, repoName: opts.repoName, subtitle: opts.subtitle, defaultTab, tabs },
   };
 
   const data = [
@@ -99,17 +133,11 @@ export function exportViz(opts: VizExportOptions): VizExportResult {
   // full of them — the first version of this put the original `<script src>` tag
   // back into the page via a stray `$&` in app.js. A function is taken verbatim.
   const page = html
-    .replace('<link rel="stylesheet" href="/style.css">', () => `<style>\n${css}\n</style>`)
-    .replace('<script type="module" src="/app.js"></script>', () => `${data}\n<script type="module">\n${js}\n</script>`);
-
-  // A replacement that silently did nothing would ship a page fetching /app.js from
-  // the domain root, which 404s on Pages and shows an empty viewer.
-  if (page.includes('href="/style.css"') || page.includes('src="/app.js"')) {
-    throw new Error("viz export: viewer/index.html no longer matches the asset tags this exporter rewrites");
-  }
+    .replace(LINK_TAG, () => `<style>\n${css}\n</style>`)
+    .replace(SCRIPT_TAG, () => `${data}\n<script type="module">\n${js}\n</script>`);
 
   mkdirSync(opts.outDir, { recursive: true });
   const file = join(opts.outDir, "index.html");
   writeFileSync(file, page);
-  return { file, bytes: Buffer.byteLength(page), contextNodes: contextGraph.nodes.length, codeNodes, defaultTab };
+  return { file, bytes: Buffer.byteLength(page), contextNodes: contextGraph.nodes.length, codeNodes, defaultTab, tabs };
 }

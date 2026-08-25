@@ -9,6 +9,7 @@ export interface VizNode {
   type: string;
   summary: string;
   sources: string[];
+  evidence?: Evidence[];
 }
 
 export interface VizEdge {
@@ -19,12 +20,30 @@ export interface VizEdge {
   confidence?: "extracted" | "inferred";
 }
 
+export interface EvidenceLine {
+  n: number | null;
+  sign: "+" | "-" | " ";
+  text: string;
+}
+
+/** A code snippet shown under a node — see `Evidence` in src/viz/assemble.ts. */
+export interface Evidence {
+  label: string;
+  note?: string;
+  lines: EvidenceLine[];
+  more?: number;
+}
+
 export interface VizGraph {
   meta: {
     repoName?: string; subtitle?: string;
     /** Set by `graft viz --export`: the tab whose graph actually has content. */
     defaultTab?: "context" | "code";
+    /** Tabs this page offers. A blast export ships Context alone. */
+    tabs?: Array<"context" | "code" | "outline">;
     nodeCount: number; edgeCount: number; skippedFiles?: number; droppedEdges?: number;
+    /** Why the graph is empty, when it is — set by `blast --export-viz`. */
+    emptyNote?: string;
   };
   nodes: VizNode[];
   edges: VizEdge[];
@@ -68,7 +87,13 @@ export const CHIP_HINT: Record<string, string> = {
 };
 
 /** Node-type → CSS custom property, per tab. */
-const CONTEXT_COLORS: Record<string, string> = { system: "--sys", concept: "--con", file: "--fil", api: "--api" };
+// `changed` / `affected` come from `graft blast --export-viz`, where the graph is a
+// PR's blast radius rather than the concept map: amber for what the diff touched,
+// blue for what depends on it. The legend labels itself from these type names.
+const CONTEXT_COLORS: Record<string, string> = {
+  system: "--sys", concept: "--con", file: "--fil", api: "--api",
+  changed: "--fil", affected: "--sys",
+};
 const CODE_COLORS: Record<string, string> = {
   file: "--k-file", class: "--k-class", function: "--k-fn", method: "--k-method",
   interface: "--k-iface", type: "--k-type", enum: "--k-enum",

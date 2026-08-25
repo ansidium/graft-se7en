@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
 import { exportViz } from "../src/viz/export.js";
 
 const VIEWER_HTML = `<!doctype html>
@@ -153,4 +154,53 @@ test("viz export: refuses to write a page whose asset tags it did not rewrite", 
     /no longer matches the asset tags/,
     "a silently un-inlined page 404s wherever it is published — fail loudly instead",
   );
+});
+
+test("viz export: asset-path text inside the assets does not fail a correct export", () => {
+  // The guard used to inspect the assembled page, so a stylesheet comment or a
+  // bundled string mentioning one of the tags failed an export that was fine.
+  const dir = viewerDir('const doc = \'<script type="module" src="/app.js"></script>\';');
+  writeFileSync(join(dir, "style.css"), '/* replaces <link rel="stylesheet" href="/style.css"> */ x{}');
+
+  const res = exportViz({ contextDir: contextDir(), viewerDir: dir, outDir: out(), repoName: "demo" });
+  const page = readFileSync(res.file, "utf8");
+  assert.match(page, /replaces <link rel="stylesheet" href="\/style\.css">/, "the comment survives inlining");
+  assert.match(page, /window\.__GRAFT_DATA__/, "and the export still happened");
+});
+
+test("viz export: tabs can be trimmed, and the payload goes with them", () => {
+  const ctx = contextDir();
+  const all = exportViz({ contextDir: ctx, viewerDir: viewerDir(), outDir: out(), repoName: "demo" });
+  const one = exportViz({ contextDir: ctx, viewerDir: viewerDir(), outDir: out(), repoName: "demo", tabs: ["context"] });
+
+  assert.deepEqual(one.tabs, ["context"]);
+  assert.match(readFileSync(one.file, "utf8"), /"tabs":\["context"\]/, "the viewer is told which tabs to show");
+  // The dropped tabs are the only readers of the wiring graph, so it must not be
+  // embedded at all — that payload is most of a blast page's size.
+  assert.equal(one.codeNodes, 0, "no code graph is read");
+  assert.match(readFileSync(one.file, "utf8"), /codeGraph: null/);
+  assert.ok(all.codeNodes > 0 && readFileSync(all.file, "utf8").length > readFileSync(one.file, "utf8").length);
+});
+
+test("viz --tabs: a bad tab name fails loudly rather than exporting a page missing a tab", () => {
+  const run = (args: string[]): { status: number; stderr: string } => {
+    try {
+      execFileSync(process.execPath, ["--import", "tsx", "src/cli.ts", ...args], { encoding: "utf8", stdio: "pipe" });
+      return { status: 0, stderr: "" };
+    } catch (err) {
+      const e = err as { status?: number; stderr?: string };
+      return { status: e.status ?? 1, stderr: e.stderr ?? "" };
+    }
+  };
+
+  // Deliberately run where there is NO graft index — CI is such a checkout, and
+  // the first version of this test only passed on a machine that happened to have
+  // one, so it broke main the day it merged.
+  const bare = out();
+  const bad = run(["viz", bare, "--export", out(), "--tabs", "context,graph"]);
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /--tabs takes a comma-separated subset of context, code, outline — got "graph"/);
+  assert.equal(run(["viz", bare, "--export", out(), "--tabs", ""]).status, 1, "an empty list is a mistake too");
+  // …and the flag is judged on its own: an unbuilt repo is a different complaint.
+  assert.match(run(["viz", bare, "--export", out()]).stderr, /no context graph/);
 });
