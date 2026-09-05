@@ -8,6 +8,18 @@ const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
 test('not-built state', () => {
   const lines = renderStatusline(null, null, { ctxPct: null });
   assert.match(strip(lines[0]), /not built/);
+  assert.match(strip(lines[0]), /graft build/);
+});
+
+test('empty graph (0 nodes) is built, not "not built"', () => {
+  // A successful `graft build` on a docs-only repo writes a real graph with
+  // zero symbols. nodeCount === 0 must not be treated as "never built".
+  const stats = { ...emptyStats(), nodeCount: 0, edgeCount: 0 };
+  const line = strip(renderStatusline(stats, null, { ctxPct: null })[0]);
+  assert.doesNotMatch(line, /not built/);
+  assert.doesNotMatch(line, /graft build/);
+  assert.match(line, /0 nodes \/ 0 edges/);
+  assert.match(line, /✓ synced/);
 });
 
 test('two-line bar: size + freshness + ctx + last', () => {
@@ -168,7 +180,11 @@ test('formatOrientation labels and truncates to budget', () => {
   assert.match(out, /Already know the file or symbol to change\?/, 'known-target edit guidance present');
   // index truncated to budget (1500) + the fixed usage directive (per-tool descriptions + discipline).
   assert.match(out, /Refactor, rename, or multi-file change?/, 'refactor blast-radius nudge present');
-  assert.ok(out.length < 3700, 'index trimmed to budget; only the fixed directive adds to it');
+  // The guard is on the INDEX being trimmed, not on the directive's exact byte
+  // count: an untrimmed 3000-char index would land near 5200. The ceiling has
+  // deliberate slack so teaching the directive one more thing (dollar values,
+  // 0.7.x) doesn't fail a test that is watching something else.
+  assert.ok(out.length < 4000, 'index trimmed to budget; only the fixed directive adds to it');
   // Regression: `graft impact` was folded into `graft callers --depth` in 0.6.0 —
   // the always-on directive must teach the current command, not a dead one.
   assert.doesNotMatch(out, /graft impact\b/, 'does not teach the removed `graft impact` command');
@@ -194,4 +210,21 @@ test('renderSubagent shows agent name and its last query', () => {
 test('renderSubagent without a query still shows the agent', () => {
   const out = strip(renderSubagent('Plan', null));
   assert.match(out, /Plan/);
+});
+
+test('renderStatusline carries the dollar value once the session has been billed', () => {
+  const stats = { ...emptyStats(), nodeCount: 1, edgeCount: 0, totalCount: 1 };
+  const s = { ...freshSession(), savedTokens: 100_000, inputCostMicros: 600_000, inputTokensBilled: 1_000_000 };
+  const line = strip(renderStatusline(stats, s as any, { ctxPct: null })[0]);
+  assert.match(line, /~100,000 tok saved · ~\$0\.06/);
+});
+
+test('renderStatusline shows tokens alone until a turn has been billed', () => {
+  // Turn one of every session, and every turn on a host that exposes no
+  // transcript. Tokens are still true; a price nobody measured is not.
+  const stats = { ...emptyStats(), nodeCount: 1, edgeCount: 0, totalCount: 1 };
+  const s = { ...freshSession(), savedTokens: 100_000 };
+  const line = strip(renderStatusline(stats, s as any, { ctxPct: null })[0]);
+  assert.match(line, /~100,000 tok saved/);
+  assert.doesNotMatch(line, /\$/);
 });

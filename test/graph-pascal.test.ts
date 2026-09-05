@@ -219,6 +219,50 @@ test("Pascal resolves uses and case-insensitive typed member calls", async () =>
   }
 });
 
+test("Pascal preserves cross-unit inherited calls without cross-language name collisions", async () => {
+  const dir = fixture();
+  try {
+    writeFileSync(join(dir, "Child.pas"), `unit Child;
+interface
+uses runner, Controller;
+type
+  TChild = class(trunner)
+  end;
+procedure RunChild(Value: tchild);
+implementation
+procedure RunChild(Value: tchild);
+begin
+  Value.sTOP;
+  startcontroller;
+end;
+end.
+`, "utf8");
+    writeFileSync(join(dir, "frontend.ts"), `export class TRunner {}
+export function probe(runner: TRunner) {
+  runner.Stop();
+  StartController();
+}
+`, "utf8");
+    const result = await buildGraph(dir);
+    assert.deepEqual(result.errors, []);
+    const graph = readGraph(wiringPath(join(dir, "graft")))!;
+    for (const [source, target, relation] of [
+      ["Child.pas", "Runner.pas", "imports"],
+      ["Child.pas#TChild", "Runner.pas#TRunner", "extends"],
+      ["Child.pas#RunChild", "Runner.pas#TRunner.Stop", "calls"],
+      ["Child.pas#RunChild", "Controller.pas#StartController", "calls"],
+    ]) {
+      assert.ok(graph.edges.some((e) => e.source === source && e.target === target && e.relation === relation),
+        `${relation}: ${source} -> ${target}`);
+    }
+    assert.ok(node(graph, "frontend.ts#probe"), "the TypeScript caller must be indexed");
+    assert.ok(!graph.edges.some((e) => e.source.startsWith("frontend.ts") && /\.pas(?:#|$)/i.test(e.target)),
+      "TypeScript names must not resolve to Pascal functions or methods");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("Pascal chunked parsing keeps symbols beyond 32 KB", async () => {
   const dir = mkdtempSync(join(tmpdir(), "graft-pascal-large-"));
   try {

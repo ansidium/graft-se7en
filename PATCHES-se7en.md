@@ -2,6 +2,11 @@
 
 This file inventories the fork delta from `NanoNets/context-graph-engine`.
 
+The fork is synchronized with upstream `0.17.0` (`05760b0`). Pascal's
+case-insensitive resolution remains compatible with upstream's language-family
+filtering, Swift dispatch, and PHP trait resolution. Regression coverage includes
+cross-unit Pascal inheritance and mixed Pascal/TypeScript name collisions.
+
 ## Modified upstream files
 
 - `package.json` — changes only the package name to `graft-se7en`.
@@ -14,6 +19,7 @@ This file inventories the fork delta from `NanoNets/context-graph-engine`.
 - `src/hosts/mcp-config.ts` — points the MCP `npx` launch line at `github:ansidium/graft-se7en` so the wiring self-heal never rewrites configs back to the npm registry package.
 - `src/cli-meta.ts` — `graft upgrade` installs from `github:ansidium/graft-se7en` instead of `@nanonets/graft@latest` (which would replace the fork with upstream).
 - `src/upkeep.ts` — the update nudge suggests rebasing the fork and reinstalling from GitHub rather than `npm i -g @nanonets/graft@latest`.
+- `src/ask/ask.ts`, `src/context/savings.ts`, `src/claude/format.ts`, `src/claude/session-metrics.ts` — keep locale-stable numeric formatting while retaining upstream's savings reporting.
 - `test/mcp-tools.test.ts` — covers workspace file API routing.
 - `test/hosts-mcp-config.test.ts`, `test/cli-meta.test.ts`, `test/upkeep.test.ts`, `test/upkeep-hooks.test.ts` — assertions follow the GitHub launch/upgrade lines above.
 
