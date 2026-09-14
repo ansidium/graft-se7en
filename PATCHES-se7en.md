@@ -2,7 +2,7 @@
 
 This file inventories the fork delta from `NanoNets/context-graph-engine`.
 
-The fork is synchronized with upstream `0.17.0` (`05760b0`). Pascal's
+The fork is synchronized with upstream `0.18.0` (`f9e6539`). Pascal's
 case-insensitive resolution remains compatible with upstream's language-family
 filtering, Swift dispatch, and PHP trait resolution. Regression coverage includes
 cross-unit Pascal inheritance and mixed Pascal/TypeScript name collisions.
@@ -10,6 +10,7 @@ cross-unit Pascal inheritance and mixed Pascal/TypeScript name collisions.
 ## Modified upstream files
 
 - `package.json` — changes only the package name to `graft-se7en`.
+- `package-lock.json` — updates the transitive `js-yaml` dependency to `3.15.2`, fixing `GHSA-2883-xcg3-v3hh` within the existing compatible version range.
 - `README.md` — documents the fork's Pascal/Delphi support and upstream update flow.
 - `src/graph/extract.ts` — adds the optional case-insensitive resolver intent used by Pascal edges.
 - `src/graph/generic.ts` — registers Pascal in the existing WASM language registry and delegates to its focused extractor.
