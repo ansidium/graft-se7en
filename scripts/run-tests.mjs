@@ -11,8 +11,9 @@
  * Enumerating the files here instead means `npm test` behaves identically in
  * cmd.exe, PowerShell, bash and CI, on any supported Node.
  */
-import { readdirSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -43,11 +44,32 @@ const gitEnv = {
   GIT_CONFIG_KEY_1: "tag.gpgsign", GIT_CONFIG_VALUE_1: "false",
 };
 
+// The whole run gets a throwaway home. `graft init` writes outside the repo — hooks
+// and a helper under ~/.claude, ~/.claude.json, ~/.codex's hooks.json and
+// config.toml — and first retracts every agent it wasn't asked to wire. So a test
+// that spawns the CLI, or calls runInit/runRetract, without its own `home` rewired
+// the developer's real agents: one run of this suite removed Codex's graft MCP
+// server and hooks from ~/.codex. `homedir()` reads HOME on posix and USERPROFILE on
+// Windows, so both point here; CLAUDE_CONFIG_DIR would route the Claude writes
+// around it, so it is dropped. The scratch home carries its own ~/.gitconfig
+// identity — as a file rather than in gitEnv, because GIT_CONFIG_* outranks the
+// repo-level identity some tests set and assert on.
+const home = mkdtempSync(join(tmpdir(), "graft-test-home-"));
+writeFileSync(join(home, ".gitconfig"), "[user]\n\tname = graft tests\n\temail = tests@graft.invalid\n");
+const env = { ...process.env, ...gitEnv, HOME: home, USERPROFILE: home };
+delete env.CLAUDE_CONFIG_DIR;
+
 const result = spawnSync(process.execPath, ["--import", "tsx", "--test", ...files], {
   cwd: repoRoot,
   stdio: "inherit",
-  env: { ...process.env, ...gitEnv },
+  env,
 });
+
+try {
+  rmSync(home, { recursive: true, force: true });
+} catch {
+  /* a straggler still holding a file there; the OS temp cleaner gets it */
+}
 
 if (result.error) {
   console.error(`✗ could not start the test runner: ${result.error.message}`);
