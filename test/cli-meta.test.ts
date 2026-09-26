@@ -9,6 +9,7 @@ import {
   resolvePackageJsonPath,
   readCurrentVersion,
   isRunningViaNpx,
+  npmInvocation,
 } from '../src/cli-meta.js';
 
 // --- formatVersionReport: pure formatting, injected npm-view results (no network) ---
@@ -86,4 +87,25 @@ test('isRunningViaNpx is false for a regular global install', () => {
     join(sep, 'usr', 'local', 'lib', 'node_modules', '@nanonets', 'graft', 'dist', 'cli.js'),
   ).href;
   assert.equal(isRunningViaNpx(globalPath), false);
+});
+
+// --- npmInvocation: how npm is launched per platform (pure, no spawn) ---
+//
+// On Windows `npm` is `npm.cmd`, which spawnSync can't start without a shell:
+// `graft version` said "unreachable" on every run and `graft upgrade` never ran.
+
+test('npmInvocation: Windows runs npm through the shell as one command line', () => {
+  assert.deepEqual(npmInvocation(['view', '@nanonets/graft', 'version'], 'win32'), {
+    command: 'npm view @nanonets/graft version',
+    args: [],
+    shell: true,
+  });
+});
+
+test('npmInvocation: other platforms spawn npm directly with its args', () => {
+  assert.deepEqual(npmInvocation(['install', '-g', 'github:ansidium/graft-se7en'], 'linux'), {
+    command: 'npm',
+    args: ['install', '-g', 'github:ansidium/graft-se7en'],
+    shell: false,
+  });
 });

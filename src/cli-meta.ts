@@ -5,7 +5,8 @@
  * injected results instead of hitting the network from tests.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
+import type { SpawnSyncOptions } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { toPosixPath } from "./util/paths.js";
@@ -42,6 +43,30 @@ export function isRunningViaNpx(moduleUrl: string): boolean {
   return toPosixPath(fileURLToPath(moduleUrl)).includes("/_npx/");
 }
 
+export interface NpmInvocation {
+  command: string;
+  args: string[];
+  shell: boolean;
+}
+
+/** How to launch `npm <args>` on `platform`.
+ *
+ * On Windows `npm` is a `.cmd` shim that only a shell can start: spawned
+ * directly it fails with ENOENT, so `graft version` always read "unreachable",
+ * the background update check never stored an answer, and `graft upgrade`
+ * could not run. The shell gets one pre-joined command line rather than an args
+ * array, because Node 24 warns (DEP0190) whenever it has to concatenate args
+ * for a shell itself. Every arg passed here is a fixed token, never user input. */
+export function npmInvocation(args: readonly string[], platform: NodeJS.Platform = process.platform): NpmInvocation {
+  if (platform === "win32") return { command: ["npm", ...args].join(" "), args: [], shell: true };
+  return { command: "npm", args: [...args], shell: false };
+}
+
+function npmSync(args: readonly string[], options: SpawnSyncOptions) {
+  const inv = npmInvocation(args);
+  return spawnSync(inv.command, inv.args, { ...options, shell: inv.shell });
+}
+
 export interface NpmViewResult {
   ok: boolean;
   version?: string;
@@ -51,13 +76,13 @@ export interface NpmViewResult {
  * timeout) resolves to `{ ok: false }` rather than throwing. */
 export function getNpmViewVersion(pkgName: string = PKG_NAME, timeoutMs = 2000): NpmViewResult {
   try {
-    const res = spawnSync("npm", ["view", pkgName, "version"], {
+    const res = npmSync(["view", pkgName, "version"], {
       encoding: "utf8",
       timeout: timeoutMs,
       windowsHide: true,
     });
     if (res.error || res.signal || res.status !== 0) return { ok: false };
-    const version = res.stdout?.trim();
+    const version = res.stdout?.toString().trim();
     if (!version) return { ok: false };
     return { ok: true, version };
   } catch {
@@ -81,12 +106,13 @@ export function formatVersionReport(current: string, latest: NpmViewResult): str
 /** The global npm node_modules dir (handles Homebrew/Windows/volta layouts). */
 function globalRoot(): string | null {
   try {
-    const root = execFileSync("npm", ["root", "-g"], {
+    const res = npmSync(["root", "-g"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
-      shell: process.platform === "win32",
-    }).trim();
-    return root || null;
+      windowsHide: true,
+    });
+    if (res.error || res.status !== 0) return null;
+    return res.stdout?.toString().trim() || null;
   } catch {
     return null;
   }
@@ -140,7 +166,7 @@ export function runUpgrade(moduleUrl: string): UpgradeResult {
   if (isRunningViaNpx(moduleUrl)) {
     return { ran: false, ok: true, oldVersion };
   }
-  const res = spawnSync("npm", ["install", "-g", "github:ansidium/graft-se7en"], { stdio: "inherit" });
+  const res = npmSync(["install", "-g", "github:ansidium/graft-se7en"], { stdio: "inherit" });
   if (res.error || (res.status ?? 1) !== 0) {
     return { ran: true, ok: false, oldVersion, errorMessage: res.error?.message };
   }
