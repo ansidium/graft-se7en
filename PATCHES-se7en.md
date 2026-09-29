@@ -2,7 +2,7 @@
 
 This file inventories the fork delta from `NanoNets/context-graph-engine`.
 
-The fork is synchronized with upstream `0.20.0` (`80692e5`). Pascal's
+The fork is synchronized with upstream `0.21.1` (`375a37e`). Pascal's
 case-insensitive resolution remains compatible with upstream's language-family
 filtering, Swift dispatch, and PHP trait resolution. Regression coverage includes
 cross-unit Pascal inheritance and mixed Pascal/TypeScript name collisions.
